@@ -1,5 +1,4 @@
 [submodule "vendor/raylib"]
 	path = vendor/raylib
 	url = https://github.com/raysan5/raylib/
-[submodule "raylib"]
 	branch = 4.5.0
