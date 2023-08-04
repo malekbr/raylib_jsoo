@@ -1,0 +1,3 @@
+(library
+ (public_name raylib_jsoo)
+ (name raylib_jsoo))
