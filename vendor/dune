@@ -1,0 +1,10 @@
+(subdir
+ raylib/src
+ (rule
+  (deps
+   (glob_files_rec Makefile)
+   (glob_files_rec *.c)
+   (glob_files_rec *.h))
+  (targets libraylib.a)
+  (action
+   (run make PLATFORM=PLATFORM_WEB))))

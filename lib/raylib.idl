@@ -1,0 +1,19 @@
+interface Vector2 {
+  attribute float x;
+  attribute float y;
+};
+
+[Value] Vector2Add([Value] Vector2 v1, [Value] Vector2 v2);
+
+interface Vector3 {
+  attribute float x;
+  attribute float y;
+  attribute float z;
+};
+
+interface Vector4 {
+  attribute float x;
+  attribute float y;
+  attribute float z;
+  attribute float w;
+};

@@ -1,0 +1,8 @@
+(executable
+ (name test)
+ (modes js)
+ (libraries base raylib_jsoo))
+
+(alias
+ (name all)
+ (deps index.html))

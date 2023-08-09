@@ -1,6 +1,6 @@
 (lang dune 3.8)
 
-(name raylib_jsoo)
+(name raylib-jsoo)
 
 (generate_opam_files true)
 
@@ -16,7 +16,7 @@
 (documentation https://url/to/documentation)
 
 (package
- (name raylib_jsoo)
+ (name raylib-jsoo)
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends ocaml dune)
