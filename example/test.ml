@@ -29,7 +29,9 @@ let () =
       let () =
         init_window 800 600 (C_string.of_string "Test title");
         every_animation_frame 0. ~f:(fun rotation ->
+          let delta_rotation = get_frame_time () *. 90. in
           begin_drawing ();
+          clear_background (Pointer.malloc_value Color.repr_t Color.black);
           begin_mode_2d
             (Pointer.malloc_value
                Camera2D.repr_t
@@ -38,10 +40,16 @@ let () =
                ; rotation
                ; zoom = 1.
                });
-          draw_rectangle 380 280 40 40 (Pointer.malloc_value Color.repr_t Color.red);
+          draw_rectangle_rounded
+            (Pointer.malloc_value
+               Rectangle.repr_t
+               { x = 380.; y = 280.; width = 40.; height = 40. })
+            0.5
+            5
+            (Pointer.malloc_value Color.repr_t Color.red);
           end_mode_2d ();
           end_drawing ();
-          `Continue (rotation +. 1.))
+          `Continue (rotation +. delta_rotation))
       ;;
     end
     in

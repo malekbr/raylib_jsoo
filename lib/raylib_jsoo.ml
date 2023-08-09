@@ -8,12 +8,12 @@ let every_animation_frame init ~f =
   let rec loop () =
     match f !acc with
     | `Stop -> ()
-    | `Continue v -> acc:= v;
-    request_animation_frame loop |> ignore
+    | `Continue v ->
+      acc := v;
+      request_animation_frame loop |> ignore
   in
   request_animation_frame loop |> ignore
- ;;
-
+;;
 
 module Address : sig
   type t [@@immediate]
@@ -564,6 +564,7 @@ module Color = struct
   ;;
 
   let red = { r = 255; g = 0; b = 0; a = 255 }
+  let black = { r = 0; g = 0; b = 0; a = 255 }
 end
 
 module Vector2 = struct
@@ -613,6 +614,30 @@ module Camera2D = struct
   ;;
 end
 
+module Rectangle = struct
+  open! Memory_representation
+  open! Structure
+
+  type t =
+    { x : float
+    ; y : float
+    ; width : float
+    ; height : float
+    }
+
+  let x, repr_t = field empty_struct float32_t
+  let y, repr_t = field repr_t float32_t
+  let width, repr_t = field repr_t float32_t
+  let height, repr_t = field repr_t float32_t
+
+  let repr_t =
+    lift
+      repr_t
+      ~map:(fun { x; y; width; height } -> ((((), x), y), width), height)
+      ~contramap:(fun (((((), x), y), width), height) -> { x; y; width; height })
+  ;;
+end
+
 let vector2_add =
   Function.(
     extern
@@ -647,3 +672,22 @@ let begin_mode_2d =
 ;;
 
 let end_mode_2d = Function.(extern "_EndMode2D" (Void @-> returning Void))
+
+let get_frame_time =
+  Function.(extern "_GetFrameTime" (Void @-> returning (Primitive F32)))
+;;
+
+let draw_rectangle_rounded =
+  Function.(
+    extern
+      "_DrawRectangleRounded"
+      (Value Rectangle.repr_t
+       @-> Primitive F32
+       @-> Primitive Int32
+       @-> Value Color.repr_t
+       @-> returning Void))
+;;
+
+let clear_background =
+  Function.(extern "_ClearBackground" (Value Color.repr_t @-> returning Void))
+;;
