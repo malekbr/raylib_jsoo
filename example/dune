@@ -1,8 +1,15 @@
 (executable
  (name test)
  (modes js)
- (libraries base raylib_jsoo))
+ (libraries base raylib_jsoo)
+ (preprocess
+  (pps ppx_jane)))
+
+(env
+ (release
+  (js_of_ocaml
+   (flags :standard --source-map-inline))))
 
 (alias
  (name all)
- (deps index.html))
+ (deps index.html watermelon.png))

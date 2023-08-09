@@ -1,27 +1,26 @@
-include
-  [%js:
-  val request_animation_frame : (unit -> unit) -> int
-    [@@js.global "requestAnimationFrame"]]
+module Promise =
+[%js:
+type 'a t
 
-let every_animation_frame init ~f =
-  let acc = ref init in
-  let rec loop () =
-    match f !acc with
-    | `Stop -> ()
-    | `Continue v ->
-      acc := v;
-      request_animation_frame loop |> ignore
-  in
-  request_animation_frame loop |> ignore
-;;
+val t_of_js : (Ojs.t -> 'a) -> Ojs.t -> 'a t
+val t_to_js : ('a -> Ojs.t) -> 'a t -> Ojs.t
+
+val create : (resolve:('a -> unit) -> reject:(Ojs.t -> unit) -> unit) -> 'a t
+  [@@js.new "Promise"]
+
+val then_ : 'a t -> f:('a -> 'b) -> 'b t [@@js.call "then"]
+val map : 'a t -> f:('a -> 'b) -> 'b t [@@js.call "then"]
+val bind : 'a t -> f:('a -> 'b t) -> 'b t [@@js.call "then"]]
 
 module Address : sig
-  type t [@@immediate]
+  type t = private int [@@immediate]
 
   val t_to_js : t -> Ojs.t
   val t_of_js : Ojs.t -> t
   val add : t -> int -> t
   val zero : t
+  val of_int : int -> t
+  val to_int : t -> int
 end = struct
   type t = int
 
@@ -29,23 +28,9 @@ end = struct
   let t_of_js = Ojs.int_of_js
   let add = ( + )
   let zero = 0
+  let of_int t = t
+  let to_int t = t
 end
-
-module Element =
-[%js:
-type t
-
-val t_of_js : Ojs.t -> t
-val t_to_js : t -> Ojs.t]
-
-module Document =
-[%js:
-type t
-
-val t_of_js : Ojs.t -> t
-val t_to_js : t -> Ojs.t
-val t : t [@@js.global "document"]
-val query_selector : t -> string -> Element.t option [@@js.call "querySelector"]]
 
 module Array_buffer =
 [%js:
@@ -61,6 +46,7 @@ type t
 val t_of_js : Ojs.t -> t
 val t_to_js : t -> Ojs.t
 val create : Array_buffer.t -> t [@@js.new "DataView"]
+val buffer : t -> Array_buffer.t [@@js.get]
 val get_int8 : t -> byte_offset:Address.t -> int [@@js.call "getInt8"]
 val set_int8 : t -> byte_offset:Address.t -> value:int -> unit [@@js.call "setInt8"]
 val get_uint8 : t -> byte_offset:Address.t -> int [@@js.call "getUint8"]
@@ -101,15 +87,66 @@ val get_float64 : t -> byte_offset:Address.t -> little_endian:bool -> float
 
 val set_float64 : t -> byte_offset:Address.t -> value:float -> little_endian:bool -> unit
   [@@js.call "setFloat64"]
+
+val byte_length : t -> int [@@js.get "byteLength"]
+val byte_offset : t -> int [@@js.get "byteOffset"]
 (**)]
+
+module Response =
+[%js:
+type t
+
+val t_to_js : t -> Ojs.t
+val t_of_js : Ojs.t -> t
+val array_buffer : t -> Array_buffer.t Promise.t [@@js.call "arrayBuffer"]]
+
+include
+  [%js:
+  val fetch : string -> unit -> Response.t Promise.t [@@js.global]
+
+  val request_animation_frame : (unit -> unit) -> int
+    [@@js.global "requestAnimationFrame"]]
+
+let every_animation_frame init ~f =
+  let acc = ref init in
+  let rec loop () =
+    match f !acc with
+    | `Stop -> ()
+    | `Continue v ->
+      acc := v;
+      request_animation_frame loop |> ignore
+  in
+  request_animation_frame loop |> ignore
+;;
+
+module Element =
+[%js:
+type t
+
+val t_of_js : Ojs.t -> t
+val t_to_js : t -> Ojs.t]
+
+module Document =
+[%js:
+type t
+
+val t_of_js : Ojs.t -> t
+val t_to_js : t -> Ojs.t
+val t : t [@@js.global "document"]
+val query_selector : t -> string -> Element.t option [@@js.call "querySelector"]]
 
 module Sized_int_array =
 [%js:
 type t
 
 val create_uint16 : int -> t [@@js.new "Uint16Array"]
+
+val create_uint8 : Array_buffer.t -> ?byte_offset:int -> ?length:int -> unit -> t
+  [@@js.new "Uint8Array"]
+
 val buffer : t -> Array_buffer.t [@@js.get]
 val t_of_js : Ojs.t -> t
+val set_buffer : t -> src:t -> ?byte_offset:int -> unit -> unit [@@js.call "set"]
 val set : t -> int list -> unit [@@js.call]]
 
 let is_small_endian =
@@ -130,13 +167,41 @@ val t_of_js : (Ojs.t -> 'a) -> Ojs.t -> 'a t
 val get : 'a t -> Address.t -> 'a [@@js.call]
 val set : 'a t -> Address.t -> 'a -> unit [@@js.call]]
 
-module Promise =
-[%js:
-type 'a t
+module Nothing = struct
+  type t = |
 
-val t_of_js : (Ojs.t -> 'a) -> Ojs.t -> 'a t
-val t_to_js : ('a -> Ojs.t) -> 'a t -> Ojs.t
-val then_ : 'a t -> ('a -> 'b) -> 'b t [@@js.call "then"]]
+  let unreachable : t -> 'a = function
+    | _ -> .
+  ;;
+
+  let t_to_js = unreachable
+end
+
+module FS =
+[%js:
+type t
+
+val t_to_js : t -> Ojs.t
+val t_of_js : Ojs.t -> t
+
+module Dir : sig
+  type t
+end
+
+module File : sig
+  type t
+end
+
+val mkdir : t -> path:string -> ?mode:int -> unit -> Dir.t [@@js.call]
+
+val write_file
+  :  t
+  -> path:string
+  -> data:([ `String of string | `Data_view of Data_view.t ][@js.union])
+  -> ?opts:Nothing.t
+  -> unit
+  -> unit
+  [@@js.call "writeFile"]]
 
 module Emcc =
 [%js:
@@ -149,6 +214,7 @@ val malloc : t -> int -> Address.t [@@js.call "_malloc"]
 val string_to_new_utf8 : t -> string -> Address.t [@@js.call "stringToNewUTF8"]
 val utf8_to_string : t -> Address.t -> string [@@js.call "UTF8ToString"]
 val free : t -> Address.t -> unit [@@js.call "_free"]
+val fs : t -> FS.t [@@js.get "FS"]
 val set_canvas : t -> Element.t -> unit [@@js.set]]
 
 let heap = ref None
@@ -175,7 +241,7 @@ module Console = struct
 end
 
 let (ready : Emcc.t Promise.t) =
-  Promise.then_ emcc (fun emcc ->
+  Promise.then_ emcc ~f:(fun emcc ->
     heap := Some (Emcc.heap emcc);
     emcc_instance := Some emcc;
     emcc)
@@ -183,6 +249,18 @@ let (ready : Emcc.t Promise.t) =
 
 let instance = lazy (Option.get !emcc_instance)
 let heap = lazy (Option.get !heap |> Sized_int_array.buffer |> Data_view.create)
+
+let memcpy_dataview ~(dst : Address.t) ~src =
+  let heap = Lazy.force instance |> Emcc.heap in
+  let src =
+    Sized_int_array.create_uint8
+      (Data_view.buffer src)
+      ~length:(Data_view.byte_length src)
+      ~byte_offset:(Data_view.byte_offset src)
+      ()
+  in
+  Sized_int_array.set_buffer heap ~src ~byte_offset:(dst :> int) ()
+;;
 
 module Memory_representation = struct
   module Setter_getter = struct
@@ -307,6 +385,7 @@ module Memory_representation = struct
   ;;
 
   let char = lift uint8_t ~map:Char.code ~contramap:Char.chr
+  let address = lift uint32_t ~map:Address.to_int ~contramap:Address.of_int
 
   module Structure = struct
     let empty_struct =
@@ -341,6 +420,7 @@ module Pointer : sig
 
   val unsafe_cast : 'a t -> 'b Memory_representation.t -> 'b t
   val unsafe_of_raw : Address.t -> 'a Memory_representation.t -> 'a t
+  val repr_t : 'a Memory_representation.t -> 'a t Memory_representation.t
   val set_indexed : 'a t -> 'a -> int -> unit
   val set : 'a t -> 'a -> unit
   val get_indexed : 'a t -> int -> 'a
@@ -359,6 +439,13 @@ end = struct
   let unsafe_cast t memory_representation = { t with memory_representation }
   let unsafe_of_raw address memory_representation = { address; memory_representation }
   let free t = Emcc.free (Lazy.force instance) t.address
+
+  let repr_t memory_representation =
+    Memory_representation.lift
+      Memory_representation.address
+      ~map:(fun t -> t.address)
+      ~contramap:(fun address -> { memory_representation; address })
+  ;;
 
   let malloc ?(gc = true) (memory_representation : _ Memory_representation.t) n =
     let t =
@@ -537,6 +624,14 @@ module C_string = struct
     pointer
   ;;
 
+  let of_data_view ?gc (data_view : Data_view.t) =
+    let t =
+      Pointer.malloc ?gc Memory_representation.char (Data_view.byte_length data_view)
+    in
+    memcpy_dataview ~dst:(Pointer.address t) ~src:data_view;
+    t
+  ;;
+
   let to_string (t : t) = Emcc.utf8_to_string (Lazy.force instance) (Pointer.address t)
 end
 
@@ -565,6 +660,7 @@ module Color = struct
 
   let red = { r = 255; g = 0; b = 0; a = 255 }
   let black = { r = 0; g = 0; b = 0; a = 255 }
+  let white = { r = 255; g = 255; b = 255; a = 255 }
 end
 
 module Vector2 = struct
@@ -638,6 +734,62 @@ module Rectangle = struct
   ;;
 end
 
+module Image = struct
+  open! Memory_representation
+  open! Structure
+
+  type t =
+    { data : C_string.t
+    ; width : int
+    ; height : int
+    ; mipmaps : int
+    ; format : int
+    }
+
+  let data, repr_t = field empty_struct (Pointer.repr_t Memory_representation.char)
+  let width, repr_t = field repr_t int32_t
+  let height, repr_t = field repr_t int32_t
+  let mipmaps, repr_t = field repr_t int32_t
+  let format, repr_t = field repr_t int32_t
+
+  let repr_t =
+    lift
+      repr_t
+      ~map:(fun { data; width; height; mipmaps; format } ->
+        (((((), data), width), height), mipmaps), format)
+      ~contramap:(fun ((((((), data), width), height), mipmaps), format) ->
+        { data; width; height; mipmaps; format })
+  ;;
+end
+
+module Texture2D = struct
+  open! Memory_representation
+  open! Structure
+
+  type t =
+    { id : int
+    ; width : int
+    ; height : int
+    ; mipmaps : int
+    ; format : int
+    }
+
+  let id, repr_t = field empty_struct uint32_t
+  let width, repr_t = field repr_t int32_t
+  let height, repr_t = field repr_t int32_t
+  let mipmaps, repr_t = field repr_t int32_t
+  let format, repr_t = field repr_t int32_t
+
+  let repr_t =
+    lift
+      repr_t
+      ~map:(fun { id; width; height; mipmaps; format } ->
+        (((((), id), width), height), mipmaps), format)
+      ~contramap:(fun ((((((), id), width), height), mipmaps), format) ->
+        { id; width; height; mipmaps; format })
+  ;;
+end
+
 let vector2_add =
   Function.(
     extern
@@ -690,4 +842,37 @@ let draw_rectangle_rounded =
 
 let clear_background =
   Function.(extern "_ClearBackground" (Value Color.repr_t @-> returning Void))
+;;
+
+let load_texture =
+  Function.(extern "_LoadTexture" (C_string.t @-> returning (Value Texture2D.repr_t)))
+;;
+
+let load_texture_from_image =
+  Function.(
+    extern
+      "_LoadTextureFromImage"
+      (Value Image.repr_t @-> returning (Value Texture2D.repr_t)))
+;;
+
+let load_image =
+  Function.(extern "_LoadImage" (C_string.t @-> returning (Value Image.repr_t)))
+;;
+
+let load_image_from_memory =
+  Function.(
+    extern
+      "_LoadImageFromMemory"
+      (C_string.t @-> C_string.t @-> Primitive UInt32 @-> returning (Value Image.repr_t)))
+;;
+
+let draw_texture =
+  Function.(
+    extern
+      "_DrawTexture"
+      (Value Texture2D.repr_t
+       @-> Primitive Int32
+       @-> Primitive Int32
+       @-> Value Color.repr_t
+       @-> returning Void))
 ;;

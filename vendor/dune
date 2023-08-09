@@ -7,4 +7,4 @@
    (glob_files_rec *.h))
   (targets libraylib.a)
   (action
-   (run make PLATFORM=PLATFORM_WEB))))
+   (run make PLATFORM=PLATFORM_WEB "CUSTOM_CFLAGS=-gsource-map"))))
