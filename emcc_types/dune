@@ -1,4 +1,0 @@
-(library
- (public_name raylib-jsoo.emcc-types)
- (name emcc_types)
- (libraries base))
