@@ -1,9 +1,11 @@
 open! Base
-open! Raylib_jsoo
+open! Raylib_jsoo.Javascript_api
+open! Raylib_jsoo.Emscripten
+open! Raylib_jsoo.Raylib
 
 module Promise = struct
   module T = struct
-    type 'a t = 'a Promise.t
+    type 'a t = 'a Promise.Any_error.t
 
     let return a = Promise.create (fun ~resolve ~reject:_ -> resolve a)
     let bind = Promise.bind
@@ -16,36 +18,35 @@ end
 
 open! Promise.Let_syntax
 
-let () =
-  Console.log [ Ojs.string_to_js "is_small_endian"; Ojs.bool_to_js is_small_endian ]
-;;
-
+let () = Console.log [ Ojs.string_to_js "little_endian"; Ojs.bool_to_js little_endian ]
 let watermelon_path = "assets/watermelon.png"
 
 module Load_state = struct
   type t =
-    { emcc : Emcc.t
+    { instance : Module.t
     ; watermelon : Data_view.t
     }
 end
 
 let ready =
-  let%map emcc = ready
+  let%map instance = ready
   and watermelon =
     let%bind response = fetch "watermelon.png" () in
     Response.array_buffer response
   in
-  { Load_state.emcc; watermelon = Data_view.create watermelon }
+  { Load_state.instance; watermelon = Data_view.create watermelon }
 ;;
 
 let (_ : unit Promise.t) =
-  let%map { Load_state.emcc; watermelon } = ready in
+  let%map { Load_state.instance; watermelon } = ready in
   let module _ = struct
     let () =
-      Document.(query_selector t "canvas") |> Option.value_exn |> Emcc.set_canvas emcc
+      Document.(query_selector t "canvas")
+      |> Option.value_exn
+      |> Module.set_canvas instance
     ;;
 
-    let () = Console.log [ emcc ]
+    let () = Console.log [ instance ]
 
     let vector =
       vector2_add
@@ -58,7 +59,7 @@ let (_ : unit Promise.t) =
     let () = Console.log [ C_string.(of_string "to c and back" |> to_string) ]
 
     let () =
-      set_config_flags Config_flags.(C_repr.of_ocaml_t MSAA_4X_HINT |> C_repr.Orable.make);
+      set_config_flags (Config_flags.C_repr.Orable.of_ocaml_list [ MSAA_4X_HINT ]);
       init_window 800 600 (C_string.of_string "Test title");
       let watermelon_image =
         load_image_from_memory

@@ -8,6 +8,10 @@
  (preprocess
   (pps gen_js_api.ppx)))
 
+(cinaps
+ (files javascript_api.ml)
+ (libraries cinaps_stubs))
+
 (rule
  (deps ../vendor/raylib/src/libraylib.a)
  (targets raylib-no-global.js)

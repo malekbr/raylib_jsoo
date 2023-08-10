@@ -3,7 +3,7 @@
  (modes js)
  (libraries base raylib_jsoo)
  (preprocess
-  (pps ppx_jane)))
+  (pps gen_js_api.ppx ppx_jane)))
 
 (alias
  (name all)

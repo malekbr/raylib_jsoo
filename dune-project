@@ -11,6 +11,8 @@
 
 (maintainers "Maintainer Name")
 
+(using cinaps 1.3)
+
 (license LICENSE)
 
 (documentation https://url/to/documentation)

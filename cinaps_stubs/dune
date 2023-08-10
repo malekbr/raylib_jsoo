@@ -1,0 +1,3 @@
+(library
+ (name cinaps_stubs)
+ (modules cinaps_stubs))
