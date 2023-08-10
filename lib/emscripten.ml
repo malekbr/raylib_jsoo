@@ -399,6 +399,14 @@ end = struct
   ;;
 end
 
+let ( .@() ) t (get : _ Memory_representation.Setter_getter.t) =
+  get.get (Pointer.address t)
+;;
+
+let ( .@()<- ) t (get : _ Memory_representation.Setter_getter.t) v =
+  get.set (Pointer.address t) v
+;;
+
 module Type = struct
   type 'a t =
     | Primitive : 'a Primitive.t -> 'a t

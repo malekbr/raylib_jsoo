@@ -37,6 +37,7 @@ module Color = struct
       ~contramap:(fun (((((), r), g), b), a) -> { r; g; b; a })
   ;;
 
+  let create r g b a = Pointer.malloc_value repr_t { r; g; b; a }
   let red = { r = 255; g = 0; b = 0; a = 255 }
   let black = { r = 0; g = 0; b = 0; a = 255 }
   let white = { r = 255; g = 255; b = 255; a = 255 }
@@ -46,10 +47,12 @@ module Vector2 = struct
   open! Memory_representation
   open! Structure
 
-  type t =
+  type t' =
     { x : float
     ; y : float
     }
+
+  type t = t' Pointer.t
 
   let zero = { x = 0.; y = 0. }
   let x, repr_t = field empty_struct float32_t
@@ -61,18 +64,29 @@ module Vector2 = struct
       ~map:(fun { x; y } -> ((), x), y)
       ~contramap:(fun (((), x), y) -> { x; y })
   ;;
+
+  let create x y = Pointer.malloc_value repr_t { x; y }
+  let x (t : t Pointer.t) = t.@(x)
+  let y (t : t Pointer.t) = t.@(y)
+
+  let add =
+    Function.(
+      extern "_Vector2Add" (Value repr_t @-> Value repr_t @-> returning (Value repr_t)))
+  ;;
 end
 
 module Camera2D = struct
   open! Memory_representation
   open! Structure
 
-  type t =
-    { offset : Vector2.t
-    ; target : Vector2.t
+  type t' =
+    { offset : Vector2.t'
+    ; target : Vector2.t'
     ; rotation : float (* Degrees *)
     ; zoom : float (* Scaling *)
     }
+
+  type t = t' Pointer.t
 
   let offset, repr_t = field empty_struct Vector2.repr_t
   let target, repr_t = field repr_t Vector2.repr_t
@@ -87,18 +101,24 @@ module Camera2D = struct
       ~contramap:(fun (((((), offset), target), rotation), zoom) ->
         { offset; target; rotation; zoom })
   ;;
+
+  let create offset target rotation zoom =
+    Pointer.malloc_value repr_t { offset; target; rotation; zoom }
+  ;;
 end
 
 module Rectangle = struct
   open! Memory_representation
   open! Structure
 
-  type t =
+  type t' =
     { x : float
     ; y : float
     ; width : float
     ; height : float
     }
+
+  type t = t' Pointer.t
 
   let x, repr_t = field empty_struct float32_t
   let y, repr_t = field repr_t float32_t
@@ -111,19 +131,23 @@ module Rectangle = struct
       ~map:(fun { x; y; width; height } -> ((((), x), y), width), height)
       ~contramap:(fun (((((), x), y), width), height) -> { x; y; width; height })
   ;;
+
+  let create x y width height = Pointer.malloc_value repr_t { x; y; width; height }
 end
 
 module Image = struct
   open! Memory_representation
   open! Structure
 
-  type t =
+  type t' =
     { data : C_string.t
     ; width : int
     ; height : int
     ; mipmaps : int
     ; format : int
     }
+
+  type t = t' Pointer.t
 
   let data, repr_t = field empty_struct (Pointer.repr_t Memory_representation.char)
   let width, repr_t = field repr_t int32_t
@@ -145,13 +169,15 @@ module Texture2D = struct
   open! Memory_representation
   open! Structure
 
-  type t =
+  type t' =
     { id : int
     ; width : int
     ; height : int
     ; mipmaps : int
     ; format : int
     }
+
+  type t = t' Pointer.t
 
   let id, repr_t = field empty_struct uint32_t
   let width, repr_t = field repr_t int32_t
@@ -183,13 +209,6 @@ module Config_flags = struct
 
   module C_repr = (val Memory_representation.make_enum all ~int_value)
 end
-
-let vector2_add =
-  Function.(
-    extern
-      "_Vector2Add"
-      (Value Vector2.repr_t @-> Value Vector2.repr_t @-> returning (Value Vector2.repr_t)))
-;;
 
 let init_window =
   Function.(

@@ -47,14 +47,7 @@ let (_ : unit Promise.t) =
     ;;
 
     let () = Console.log [ instance ]
-
-    let vector =
-      vector2_add
-        (Pointer.malloc_value Vector2.repr_t { x = 1.; y = 2. })
-        (Pointer.malloc_value Vector2.repr_t { x = 4.; y = 5. })
-      |> Pointer.get
-    ;;
-
+    let vector = Vector2.add (Vector2.create 1. 2.) (Vector2.create 4. 5.) |> Pointer.get
     let () = Console.log [ vector.x; vector.y ]
     let () = Console.log [ C_string.(of_string "to c and back" |> to_string) ]
 
