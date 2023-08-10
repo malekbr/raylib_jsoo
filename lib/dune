@@ -4,28 +4,38 @@
  (libraries ojs js_of_ocaml)
  (js_of_ocaml
   (javascript_files raylib.js))
+ (modes byte)
  (preprocess
   (pps gen_js_api.ppx)))
 
 (rule
  (deps ../vendor/raylib/src/libraylib.a)
- (targets raylib.js)
+ (targets raylib-no-global.js)
  (action
   (run
    emcc
    ../vendor/raylib/src/libraylib.a
    -o
-   raylib.js
+   raylib-no-global.js
    -sUSE_GLFW=3
    -sLINKABLE=1
    -sWASM=1
-   -gsource-map
    -sMODULARIZE
    -s
    "EXPORT_NAME=\"createModule\""
    -sEXPORTED_FUNCTIONS=_malloc,_free
    "-sEXPORT_ALL"
    -sSINGLE_FILE)))
+
+(rule
+ (deps raylib-no-global.js)
+ (targets raylib.js)
+ (action
+  (with-stdout-to
+   raylib.js
+   (progn
+    (cat raylib-no-global.js)
+    (echo "this.createModule = createModule;")))))
 
 ; (rule
 ;  (deps raylib.js test.html)

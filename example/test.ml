@@ -58,6 +58,7 @@ let (_ : unit Promise.t) =
     let () = Console.log [ C_string.(of_string "to c and back" |> to_string) ]
 
     let () =
+      set_config_flags Config_flags.(C_repr.of_ocaml_t MSAA_4X_HINT |> C_repr.Orable.make);
       init_window 800 600 (C_string.of_string "Test title");
       let watermelon_image =
         load_image_from_memory
@@ -88,7 +89,7 @@ let (_ : unit Promise.t) =
         draw_texture
           watermelon_texture
           460
-          300
+          (300 - 32)
           (Pointer.malloc_value Color.repr_t Color.white);
         end_mode_2d ();
         end_drawing ();

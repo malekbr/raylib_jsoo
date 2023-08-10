@@ -262,6 +262,49 @@ let memcpy_dataview ~(dst : Address.t) ~src =
   Sized_int_array.set_buffer heap ~src ~byte_offset:(dst :> int) ()
 ;;
 
+module Primitive = struct
+  type 'a t =
+    | Int8 : int t
+    | Int16 : int t
+    | Int32 : int t
+    | UInt8 : int t
+    | UInt16 : int t
+    | UInt32 : int t
+    | F32 : float t
+    | F64 : float t
+    | Lift : 'a t * ('a -> 'b) * ('b -> 'a) -> 'b t
+
+  let rec to_ojs : type a. a t -> a -> Ojs.t =
+   fun t v ->
+    match t with
+    | Int8 -> Ojs.int_to_js v
+    | Int16 -> Ojs.int_to_js v
+    | Int32 -> Ojs.int_to_js v
+    | UInt8 -> Ojs.int_to_js v
+    | UInt16 -> Ojs.int_to_js v
+    | UInt32 -> Ojs.int_to_js v
+    | F32 -> Ojs.float_to_js v
+    | F64 -> Ojs.float_to_js v
+    | Lift (t, _, f) -> to_ojs t (f v)
+ ;;
+
+  let rec of_ojs : type a. a t -> Ojs.t -> a =
+   fun t v ->
+    match t with
+    | Int8 -> Ojs.int_of_js v
+    | Int16 -> Ojs.int_of_js v
+    | Int32 -> Ojs.int_of_js v
+    | UInt8 -> Ojs.int_of_js v
+    | UInt16 -> Ojs.int_of_js v
+    | UInt32 -> Ojs.int_of_js v
+    | F32 -> Ojs.float_of_js v
+    | F64 -> Ojs.float_of_js v
+    | Lift (t, f, _) -> of_ojs t v |> f
+ ;;
+
+  let char = Lift (Int8, Char.chr, Char.code)
+end
+
 module Memory_representation = struct
   module Setter_getter = struct
     type 'a t =
@@ -413,6 +456,49 @@ module Memory_representation = struct
       setter_getter, t
     ;;
   end
+
+  module type Enum_s = sig
+    type 'a repr := 'a t
+    type t [@@immediate]
+    type ocaml_t
+
+    val repr_t : t repr
+    val primitive_t : t Primitive.t
+    val of_ocaml_t : ocaml_t -> t
+    val to_ocaml_t : t -> ocaml_t
+
+    module Orable : sig
+      type pure := t
+      type t [@@immediate]
+
+      val make : pure -> t
+      val repr_t : t repr
+      val ( ++ ) : t -> t -> t
+      val primitive_t : t Primitive.t
+    end
+  end
+
+  let make_enum (type t) all ~int_value : (module Enum_s with type ocaml_t = t) =
+    let of_int = List.map (fun t -> int_value t, t) all in
+    (module struct
+      type ocaml_t = t
+      type t = int
+
+      let repr_t = int32_t
+      let primitive_t = Primitive.Int32
+      let of_ocaml_t = int_value
+      let to_ocaml_t t = List.assoc t of_int
+
+      module Orable = struct
+        type nonrec t = t
+
+        let make t = t
+        let repr_t = repr_t
+        let primitive_t = primitive_t
+        let ( ++ ) = ( lor )
+      end
+    end)
+  ;;
 end
 
 module Pointer : sig
@@ -479,49 +565,6 @@ end = struct
     set t v;
     t
   ;;
-end
-
-module Primitive = struct
-  type 'a t =
-    | Int8 : int t
-    | Int16 : int t
-    | Int32 : int t
-    | UInt8 : int t
-    | UInt16 : int t
-    | UInt32 : int t
-    | F32 : float t
-    | F64 : float t
-    | Lift : 'a t * ('a -> 'b) * ('b -> 'a) -> 'b t
-
-  let rec to_ojs : type a. a t -> a -> Ojs.t =
-   fun t v ->
-    match t with
-    | Int8 -> Ojs.int_to_js v
-    | Int16 -> Ojs.int_to_js v
-    | Int32 -> Ojs.int_to_js v
-    | UInt8 -> Ojs.int_to_js v
-    | UInt16 -> Ojs.int_to_js v
-    | UInt32 -> Ojs.int_to_js v
-    | F32 -> Ojs.float_to_js v
-    | F64 -> Ojs.float_to_js v
-    | Lift (t, _, f) -> to_ojs t (f v)
- ;;
-
-  let rec of_ojs : type a. a t -> Ojs.t -> a =
-   fun t v ->
-    match t with
-    | Int8 -> Ojs.int_of_js v
-    | Int16 -> Ojs.int_of_js v
-    | Int32 -> Ojs.int_of_js v
-    | UInt8 -> Ojs.int_of_js v
-    | UInt16 -> Ojs.int_of_js v
-    | UInt32 -> Ojs.int_of_js v
-    | F32 -> Ojs.float_of_js v
-    | F64 -> Ojs.float_of_js v
-    | Lift (t, f, _) -> of_ojs t v |> f
- ;;
-
-  let char = Lift (Int8, Char.chr, Char.code)
 end
 
 module Type = struct
@@ -790,6 +833,21 @@ module Texture2D = struct
   ;;
 end
 
+module Config_flags = struct
+  type t =
+    | FULLSCREEN_MODE
+    | MSAA_4X_HINT
+
+  let all = [ FULLSCREEN_MODE; MSAA_4X_HINT ]
+
+  let int_value = function
+    | FULLSCREEN_MODE -> 0x2
+    | MSAA_4X_HINT -> 0x20
+  ;;
+
+  module C_repr = (val Memory_representation.make_enum all ~int_value)
+end
+
 let vector2_add =
   Function.(
     extern
@@ -817,6 +875,13 @@ let draw_rectangle =
        @-> Primitive Int32
        @-> Value Color.repr_t
        @-> returning Void))
+;;
+
+let set_config_flags =
+  Function.(
+    extern
+      "_SetConfigFlags"
+      (Primitive Config_flags.C_repr.Orable.primitive_t @-> returning Void))
 ;;
 
 let begin_mode_2d =
