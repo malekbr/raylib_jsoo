@@ -7,4 +7,6 @@
    (glob_files_rec *.h))
   (targets libraylib.a)
   (action
-   (run make PLATFORM=PLATFORM_WEB))))
+   (progn
+    (run mkdir -p emcc-cache)
+    (run make PLATFORM=PLATFORM_WEB "CUSTOM_CFLAGS=--cache emcc-cache")))))

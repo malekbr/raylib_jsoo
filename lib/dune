@@ -16,20 +16,24 @@
  (deps ../vendor/raylib/src/libraylib.a)
  (targets raylib-no-global.js)
  (action
-  (run
-   emcc
-   ../vendor/raylib/src/libraylib.a
-   -o
-   raylib-no-global.js
-   -sUSE_GLFW=3
-   -sLINKABLE=1
-   -sWASM=1
-   -sMODULARIZE
-   -s
-   "EXPORT_NAME=\"createModule\""
-   -sEXPORTED_FUNCTIONS=_malloc,_free
-   "-sEXPORT_ALL"
-   -sSINGLE_FILE)))
+  (progn
+   (run mkdir -p emcc-cache)
+   (run
+    emcc
+    ../vendor/raylib/src/libraylib.a
+    -o
+    raylib-no-global.js
+    --cache
+    emcc-cache
+    -sUSE_GLFW=3
+    -sLINKABLE=1
+    -sWASM=1
+    -sMODULARIZE
+    -s
+    "EXPORT_NAME=\"createModule\""
+    -sEXPORTED_FUNCTIONS=_malloc,_free
+    "-sEXPORT_ALL"
+    -sSINGLE_FILE))))
 
 (rule
  (deps raylib-no-global.js)

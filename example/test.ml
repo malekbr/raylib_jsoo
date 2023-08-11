@@ -19,7 +19,6 @@ end
 open! Promise.Let_syntax
 
 let () = Console.log [ Ojs.string_to_js "little_endian"; Ojs.bool_to_js little_endian ]
-let watermelon_path = "assets/watermelon.png"
 
 module Load_state = struct
   type t =
