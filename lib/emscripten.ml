@@ -11,6 +11,9 @@ let little_endian =
   | _ -> assert false
 ;;
 
+let trace_mallocs_and_frees = ref false
+let finalize v ~f = Finalization_registry.register (Finalization_registry.create f) v
+
 module Address : sig
   type t = private int [@@immediate]
 
@@ -31,18 +34,36 @@ end = struct
   let to_int t = t
 end
 
-module Module =
-[%js:
-type t
+module Module = struct
+  include
+    [%js:
+    type t
 
-val t_to_js : t -> Ojs.t
-val create : unit -> t Promise.Any_error.t [@@js.global "createModule"]
-val heap8 : t -> int Typed_array.t [@@js.get "HEAP8"]
-val malloc : t -> int -> Address.t [@@js.call "_malloc"]
-val string_to_new_utf8 : t -> string -> Address.t [@@js.call "stringToNewUTF8"]
-val utf8_to_string : t -> Address.t -> string [@@js.call "UTF8ToString"]
-val free : t -> Address.t -> unit [@@js.call "_free"]
-val set_canvas : t -> Element.t -> unit [@@js.set]]
+    val t_to_js : t -> Ojs.t
+    val create : unit -> t Promise.Any_error.t [@@js.global "createModule"]
+    val heap8 : t -> int Typed_array.t [@@js.get "HEAP8"]
+    val malloc : t -> int -> Address.t [@@js.call "_malloc"]
+    val string_to_new_utf8 : t -> string -> Address.t [@@js.call "stringToNewUTF8"]
+    val utf8_to_string : t -> Address.t -> string [@@js.call "UTF8ToString"]
+    val free : t -> Address.t -> unit [@@js.call "_free"]
+    val set_canvas : t -> Element.t -> unit [@@js.set]]
+
+  let malloc t size =
+    if !trace_mallocs_and_frees then Console.trace [ Ojs.string_to_js "malloc"; size ];
+    malloc t size
+  ;;
+
+  let free t size =
+    if !trace_mallocs_and_frees then Console.trace [ Ojs.string_to_js "free"; size ];
+    free t size
+  ;;
+
+  let string_to_new_utf8 t size =
+    if !trace_mallocs_and_frees
+    then Console.trace [ Ojs.string_to_js "string_to_new_utf8"; size ];
+    string_to_new_utf8 t size
+  ;;
+end
 
 let (ready : Module.t Promise.Any_error.t), instance =
   let instance_ref = ref None in
@@ -122,7 +143,8 @@ module Primitive = struct
     | Lift (t, f, _) -> of_ojs t v |> f
  ;;
 
-  let char = Lift (Int8, Char.chr, Char.code)
+  let char = Lift (UInt8, Char.chr, Char.code)
+  let bool = Lift (UInt8, ( = ) 0, Bool.to_int)
 end
 
 module Memory_representation = struct
@@ -256,6 +278,7 @@ module Memory_representation = struct
   ;;
 
   let char = lift uint8_t ~map:Char.code ~contramap:Char.chr
+  let bool = lift uint8_t ~map:Bool.to_int ~contramap:(( = ) 0)
   let address = lift uint32_t ~map:Address.to_int ~contramap:Address.of_int
 
   module Structure = struct
@@ -292,6 +315,7 @@ module Memory_representation = struct
 
     val repr_t : t repr
     val primitive_t : t Primitive.t
+    val ocaml_primitive_t : ocaml_t Primitive.t
     val of_ocaml_t : ocaml_t -> t
     val to_ocaml_t : t -> ocaml_t
 
@@ -318,6 +342,7 @@ module Memory_representation = struct
       let primitive_t = Primitive.Int32
       let of_ocaml_t = int_value
       let to_ocaml_t t = List.assoc t of_int
+      let ocaml_primitive_t = Primitive.Lift (primitive_t, to_ocaml_t, of_ocaml_t)
 
       module Orable = struct
         type nonrec t = t
@@ -379,7 +404,7 @@ end = struct
       ; memory_representation
       }
     in
-    if gc then Gc.finalise free_if_allocated t;
+    if gc then finalize ~f:free_if_allocated t;
     t
   ;;
 
@@ -529,7 +554,7 @@ module C_string = struct
   let of_string ?(gc = true) string =
     let address = Module.string_to_new_utf8 (Lazy.force instance) string in
     let pointer = Pointer.unsafe_of_raw address Memory_representation.char in
-    if gc then Gc.finalise Pointer.free pointer;
+    if gc then finalize ~f:Pointer.free pointer;
     pointer
   ;;
 
