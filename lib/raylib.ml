@@ -18,12 +18,14 @@ module Color = struct
   open! Memory_representation
   open! Structure
 
-  type t =
+  type t' =
     { r : int
     ; g : int
     ; b : int
     ; a : int
     }
+
+  type t = t' Pointer.t
 
   let r, repr_t = field empty_struct uint8_t
   let g, repr_t = field repr_t uint8_t
@@ -39,6 +41,7 @@ module Color = struct
 
   let create r g b a = Pointer.malloc_value repr_t { r; g; b; a }
   let red = { r = 255; g = 0; b = 0; a = 255 }
+  let green = { r = 0; g = 255; b = 0; a = 255 }
   let black = { r = 0; g = 0; b = 0; a = 255 }
   let white = { r = 255; g = 255; b = 255; a = 255 }
 end
@@ -133,6 +136,10 @@ module Rectangle = struct
   ;;
 
   let create x y width height = Pointer.malloc_value repr_t { x; y; width; height }
+  let x (t : t Pointer.t) = t.@(x)
+  let y (t : t Pointer.t) = t.@(y)
+  let width (t : t Pointer.t) = t.@(width)
+  let height (t : t Pointer.t) = t.@(height)
 end
 
 module Image = struct
@@ -295,4 +302,11 @@ let draw_texture =
        @-> Primitive Int32
        @-> Value Color.repr_t
        @-> returning Void))
+;;
+
+let draw_rectangle_rec =
+  Function.(
+    extern
+      "_DrawRectangleRec"
+      (Value Rectangle.repr_t @-> Value Color.repr_t @-> returning Void))
 ;;
