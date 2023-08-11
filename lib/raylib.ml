@@ -40,10 +40,10 @@ module Color = struct
   ;;
 
   let create r g b a = Pointer.malloc_value repr_t { r; g; b; a }
-  let red = { r = 255; g = 0; b = 0; a = 255 }
-  let green = { r = 0; g = 255; b = 0; a = 255 }
-  let black = { r = 0; g = 0; b = 0; a = 255 }
-  let white = { r = 255; g = 255; b = 255; a = 255 }
+  let red = Pointer.malloc_value_lazy repr_t { r = 255; g = 0; b = 0; a = 255 }
+  let green = Pointer.malloc_value_lazy repr_t { r = 0; g = 255; b = 0; a = 255 }
+  let black = Pointer.malloc_value_lazy repr_t { r = 0; g = 0; b = 0; a = 255 }
+  let white = Pointer.malloc_value_lazy repr_t { r = 255; g = 255; b = 255; a = 255 }
 end
 
 module Vector2 = struct

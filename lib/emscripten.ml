@@ -347,38 +347,52 @@ module Pointer : sig
   val free : 'a t -> unit
   val malloc : ?gc:bool -> 'a Memory_representation.t -> int -> 'a t
   val malloc_value : ?gc:bool -> 'a Memory_representation.t -> 'a -> 'a t
+  val malloc_lazy : ?gc:bool -> 'a Memory_representation.t -> int -> 'a t
+  val malloc_value_lazy : ?gc:bool -> 'a Memory_representation.t -> 'a -> 'a t
 end = struct
   type 'a t =
-    { address : Address.t
+    { address : Address.t lazy_t
     ; memory_representation : 'a Memory_representation.t
     }
 
-  let address t = t.address
+  let address t = Lazy.force t.address
   let unsafe_cast t memory_representation = { t with memory_representation }
-  let unsafe_of_raw address memory_representation = { address; memory_representation }
-  let free t = Module.free (Lazy.force instance) t.address
+
+  let unsafe_of_raw address memory_representation =
+    { address = lazy address; memory_representation }
+  ;;
+
+  let free t = Module.free (Lazy.force instance) (address t)
+  let free_if_allocated t = if Lazy.is_val t.address then free t
 
   let repr_t memory_representation =
     Memory_representation.lift
       Memory_representation.address
-      ~map:(fun t -> t.address)
-      ~contramap:(fun address -> { memory_representation; address })
+      ~map:(fun t -> Lazy.force t.address)
+      ~contramap:(fun address -> { memory_representation; address = lazy address })
   ;;
 
-  let malloc ?(gc = true) (memory_representation : _ Memory_representation.t) n =
+  let malloc_lazy ?(gc = true) (memory_representation : _ Memory_representation.t) n =
     let t =
-      { address = Module.malloc (Lazy.force instance) (memory_representation.size * n)
+      { address =
+          lazy (Module.malloc (Lazy.force instance) (memory_representation.size * n))
       ; memory_representation
       }
     in
-    if gc then Gc.finalise free t;
+    if gc then Gc.finalise free_if_allocated t;
+    t
+  ;;
+
+  let malloc ?gc (memory_representation : _ Memory_representation.t) n =
+    let t = malloc_lazy ?gc memory_representation n in
+    let (_ : Address.t) = address t in
     t
   ;;
 
   let get_indexed { address; memory_representation } n =
     (* TODO fix alignment *)
     memory_representation.setter_getter.get
-      (Address.add address (memory_representation.size * n))
+      (Address.add (Lazy.force address) (memory_representation.size * n))
   ;;
 
   let get t = get_indexed t 0
@@ -386,11 +400,23 @@ end = struct
   let set_indexed { address; memory_representation } v n =
     (* TODO fix alignment *)
     memory_representation.setter_getter.set
-      (Address.add address (memory_representation.size * n))
+      (Address.add (Lazy.force address) (memory_representation.size * n))
       v
   ;;
 
   let set t v = set_indexed t v 0
+
+  let malloc_value_lazy ?gc repr v =
+    let t = malloc_lazy ?gc repr 1 in
+    { t with
+      address =
+        Lazy.map
+          (fun address ->
+            set t v;
+            address)
+          t.address
+    }
+  ;;
 
   let malloc_value ?gc repr v =
     let t = malloc ?gc repr 1 in

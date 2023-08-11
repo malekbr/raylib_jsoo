@@ -63,7 +63,7 @@ let (_ : unit Promise.t) =
       every_animation_frame 0. ~f:(fun rotation ->
         let delta_rotation = get_frame_time () *. 90. in
         begin_drawing ();
-        clear_background (Pointer.malloc_value Color.repr_t Color.black);
+        clear_background Color.black;
         begin_mode_2d
           (Pointer.malloc_value
              Camera2D.repr_t
@@ -78,12 +78,8 @@ let (_ : unit Promise.t) =
              { x = 380.; y = 280.; width = 40.; height = 40. })
           0.5
           5
-          (Pointer.malloc_value Color.repr_t Color.red);
-        draw_texture
-          watermelon_texture
-          460
-          (300 - 32)
-          (Pointer.malloc_value Color.repr_t Color.white);
+          Color.red;
+        draw_texture watermelon_texture 460 (300 - 32) Color.white;
         end_mode_2d ();
         end_drawing ();
         `Continue (rotation +. delta_rotation))
