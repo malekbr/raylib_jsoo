@@ -14,6 +14,3 @@ as code generation is hard to debug.
 raylib bindings have the same size types/alignments, so this hasn't caused
 any issues.
 * Type information (sizes, etc...) is hardcoded.
-* If you curry functions, you can't use the uncurried version until you
-stop using the curried version. This can be fixed by providing an eta
-expansion of the function.
