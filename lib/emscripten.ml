@@ -11,9 +11,6 @@ let little_endian =
   | _ -> assert false
 ;;
 
-let trace_mallocs_and_frees = ref false
-let finalize v ~f = Finalization_registry.register (Finalization_registry.create f) v
-
 module Address : sig
   type t = private int [@@immediate]
 
@@ -48,21 +45,9 @@ module Module = struct
     val free : t -> Address.t -> unit [@@js.call "_free"]
     val set_canvas : t -> Element.t -> unit [@@js.set]]
 
-  let malloc t size =
-    if !trace_mallocs_and_frees then Console.trace [ Ojs.string_to_js "malloc"; size ];
-    malloc t size
-  ;;
-
-  let free t size =
-    if !trace_mallocs_and_frees then Console.trace [ Ojs.string_to_js "free"; size ];
-    free t size
-  ;;
-
-  let string_to_new_utf8 t size =
-    if !trace_mallocs_and_frees
-    then Console.trace [ Ojs.string_to_js "string_to_new_utf8"; size ];
-    string_to_new_utf8 t size
-  ;;
+  let malloc t size = malloc t size
+  let free t size = free t size
+  let string_to_new_utf8 t size = string_to_new_utf8 t size
 end
 
 let (ready : Module.t Promise.Any_error.t), instance =
@@ -404,7 +389,7 @@ end = struct
       ; memory_representation
       }
     in
-    if gc then finalize ~f:free_if_allocated t;
+    if gc then Gc.finalise free_if_allocated t;
     t
   ;;
 
@@ -459,18 +444,101 @@ let ( .@()<- ) t (get : _ Memory_representation.Setter_getter.t) v =
 ;;
 
 module Type = struct
+  module Ptr_view = struct
+    type ('repr, 'o) t =
+      { to_js_arg : 'repr Memory_representation.t -> 'o -> Address.t
+      ; finalize_arg : 'repr Pointer.t -> 'o -> unit
+      ; of_js_return : 'repr Pointer.t -> 'o
+      }
+
+    let raw =
+      { to_js_arg = (fun _repr pointer -> Pointer.address pointer)
+      ; finalize_arg = (fun _ _ -> ())
+      ; of_js_return = (fun ptr -> ptr)
+      }
+    ;;
+
+    let sized =
+      { to_js_arg =
+          (fun repr v ->
+            let ptr = Pointer.malloc ~gc:false repr (Array.length v) in
+            Array.iteri v ~f:(fun i v -> Pointer.set_indexed ptr v i);
+            Pointer.address ptr)
+      ; finalize_arg =
+          (fun ptr v ->
+            Array.iteri v ~f:(fun i _ -> v.(i) <- Pointer.get_indexed ptr i);
+            Pointer.free ptr)
+      ; of_js_return =
+          (fun _ptr ->
+            failwith
+              "Can't return a sized pointer; do not know the size. Return the raw \
+               pointer and parse out the type yourself.")
+      }
+    ;;
+
+    let const =
+      { to_js_arg =
+          (fun repr v -> Pointer.malloc_value ~gc:false repr v |> Pointer.address)
+      ; finalize_arg = (fun ptr _v -> Pointer.free ptr)
+      ; of_js_return =
+          (fun ptr ->
+            let result = Pointer.get ptr in
+            Pointer.free ptr;
+            result)
+      }
+    ;;
+
+    let single =
+      { to_js_arg =
+          (fun repr v -> Pointer.malloc_value ~gc:false repr !v |> Pointer.address)
+      ; finalize_arg =
+          (fun ptr v ->
+            v := Pointer.get ptr;
+            Pointer.free ptr)
+      ; of_js_return =
+          (fun ptr ->
+            let result = Pointer.get ptr in
+            Pointer.free ptr;
+            ref result)
+      }
+    ;;
+  end
+
   type 'a t =
     | Primitive : 'a Primitive.t -> 'a t
-    | Pointer : 'a Memory_representation.t -> 'a Pointer.t t
-    | Value : 'a Memory_representation.t -> 'a Pointer.t t
+    | Value : 'a Memory_representation.t -> 'a t
+    | Pointer : 'a Memory_representation.t * ('a, 'o) Ptr_view.t -> 'o t
     | Void : unit t
 
-  let to_ojs_fun (type a) (t : a t) =
+  let to_emscripten_covariant (type a) (t : a t) =
     match t with
     | Primitive primitive -> Some (Primitive.to_ojs primitive)
-    | Pointer _ -> Some (fun v -> Pointer.address v |> Address.t_to_js)
-    | Value _ -> Some (fun v -> Pointer.address v |> Address.t_to_js)
+    | Pointer (memory_representation, view) ->
+      Some (fun v -> view.to_js_arg memory_representation v |> Address.t_to_js)
+    | Value memory_representation ->
+      Some
+        (fun v ->
+          Pointer.malloc_value ~gc:false memory_representation v
+          |> Pointer.address
+          |> Address.t_to_js)
     | Void -> None
+  ;;
+
+  let finally_of_emscripten_covariant (type a) (t : a t) =
+    match t with
+    | Primitive _ -> Some (fun _v _ojs -> ())
+    | Void -> None
+    | Pointer (memory_representation, view) ->
+      Some
+        (fun v ojs ->
+          let ptr = Pointer.unsafe_of_raw (Address.t_of_js ojs) memory_representation in
+          view.finalize_arg ptr v)
+    | Value memory_representation ->
+      Some
+        (fun _v ojs ->
+          let address = Address.t_of_js ojs in
+          let pointer = Pointer.unsafe_of_raw address memory_representation in
+          Pointer.free pointer)
   ;;
 end
 
@@ -495,70 +563,104 @@ module Function = struct
 
   let rec build_arguments
     : type a ret.
-      (a, ret) t -> arg_index:int -> name:string -> this:Ojs.t -> args:Ojs.t array -> a
+      (a, ret) t
+      -> arg_index:int
+      -> name:string
+      -> this:Ojs.t
+      -> set:(Ojs.t array -> unit)
+      -> finally:(Ojs.t array -> unit)
+      -> a
     =
    fun t ~arg_index ~name ->
     match t with
     | Returning type_ ->
+      let set_call_and_finalize ~this ~set ~finally =
+        let args = Array.make arg_index Ojs.null in
+        set args;
+        let result = Ojs.call this name args in
+        finally args;
+        result, args
+      in
       (match type_ with
-       | Void -> fun ~this ~args -> Ojs.call this name args |> ignore
+       | Void ->
+         fun ~this ~set ~finally -> set_call_and_finalize ~this ~set ~finally |> ignore
        | Primitive t ->
          let of_ojs = Primitive.of_ojs t in
-         fun ~this ~args -> Ojs.call this name args |> of_ojs
-       | Pointer memory_representation ->
-         fun ~this ~args ->
-           (Ojs.call this name args |> Address.t_of_js |> Pointer.unsafe_of_raw)
-             memory_representation
+         fun ~this ~set ~finally ->
+           set_call_and_finalize ~this ~set ~finally |> fst |> of_ojs
+       | Pointer (memory_representation, view) ->
+         fun ~this ~set ~finally ->
+           let address =
+             set_call_and_finalize ~this ~set ~finally |> fst |> Address.t_of_js
+           in
+           Pointer.unsafe_of_raw address memory_representation |> view.of_js_return
        | Value memory_representation ->
-         fun ~this ~args ->
+         let of_pointer = Type.Ptr_view.const.of_js_return in
+         fun ~this ~set ~finally ->
            let pointer = Pointer.malloc memory_representation 1 in
-           args.(0) <- Pointer.address pointer |> Address.t_to_js;
-           Ojs.call this name args |> ignore;
-           pointer)
+           let set args =
+             args.(0) <- Pointer.address pointer |> Address.t_to_js;
+             set args
+           in
+           set_call_and_finalize ~this ~set ~finally |> ignore;
+           of_pointer pointer)
     | Abstract (arg, rest) ->
-      (match arg, Type.to_ojs_fun arg with
-       | (Primitive _ | Pointer _ | Value _), Some f ->
+      (match
+         Type.to_emscripten_covariant arg, Type.finally_of_emscripten_covariant arg
+       with
+       | Some set_v, Some finally_v ->
          let rest = build_arguments rest ~arg_index:(arg_index + 1) ~name in
-         fun ~this ~args v ->
-           args.(arg_index) <- f v;
-           rest ~this ~args
-       | (Primitive _ | Pointer _ | Value _), None -> assert false
-       | Void, _ ->
+         fun ~this ~set ~finally v ->
+           let set args =
+             args.(arg_index) <- set_v v;
+             set args
+           in
+           let finally args =
+             finally_v v args.(arg_index);
+             finally args
+           in
+           rest ~this ~set ~finally
+       | _ ->
          let rest = build_arguments rest ~arg_index ~name in
-         fun ~this ~args () -> rest ~this ~args)
+         fun ~this ~set ~finally _ -> rest ~this ~set ~finally)
  ;;
 
   (* Can't curry, maybe a list is needed? *)
   let extern (type a b ret) name (f : (a -> b, ret) t) =
-    let arg_count = arg_count f in
     let return_type = return_type f in
     match return_type with
     | Value _ ->
       fun first_arg ->
         let this = Lazy.force instance |> Module.t_to_js in
-        let args = Array.make (arg_count + 1) Ojs.null in
-        build_arguments f ~arg_index:1 ~name ~args ~this first_arg
+        build_arguments f ~arg_index:1 ~name ~this ~set:ignore ~finally:ignore first_arg
     | _ ->
       fun first_arg ->
         let this = Lazy.force instance |> Module.t_to_js in
-        let args = Array.make arg_count Ojs.null in
-        build_arguments f ~arg_index:0 ~name first_arg ~this ~args
+        build_arguments f ~arg_index:0 ~name ~this ~set:ignore ~finally:ignore first_arg
   ;;
 end
 
 module C_string = struct
-  type t = char Pointer.t
+  type t = string
 
-  let t : t Type.t = Pointer Memory_representation.char
+  let strlen =
+    Function.(
+      extern
+        "_strlen"
+        (Pointer (Memory_representation.char, Type.Ptr_view.raw)
+         @-> returning (Primitive UInt32)))
+  ;;
 
-  let of_string ?(gc = true) string =
-    let address = Module.string_to_new_utf8 (Lazy.force instance) string in
-    let pointer = Pointer.unsafe_of_raw address Memory_representation.char in
-    if gc then finalize ~f:Pointer.free pointer;
+  let ptr_of_string ?gc string =
+    let pointer =
+      Pointer.malloc ?gc Memory_representation.char (String.length string + 1)
+    in
+    String.iteri string ~f:(fun i char -> Pointer.set_indexed pointer char i);
+    Pointer.set_indexed pointer '\000' (String.length string);
     pointer
   ;;
 
-  let of_data_view ?gc (data_view : Data_view.t) =
+  let ptr_of_data_view ?gc (data_view : Data_view.t) =
     let t =
       Pointer.malloc ?gc Memory_representation.char (Data_view.byte_length data_view)
     in
@@ -566,5 +668,42 @@ module C_string = struct
     t
   ;;
 
-  let to_string (t : t) = Module.utf8_to_string (Lazy.force instance) (Pointer.address t)
+  let ptr_to_string ptr =
+    let length = strlen ptr in
+    String.init length ~f:(fun i -> Pointer.get_indexed ptr i)
+  ;;
+
+  let view =
+    { Type.Ptr_view.to_js_arg =
+        (fun (_repr : char Memory_representation.t) string ->
+          ptr_of_string ~gc:false string |> Pointer.address)
+    ; finalize_arg = (fun ptr _ -> Pointer.free ptr)
+    ; of_js_return =
+        (fun ptr ->
+          let string = ptr_to_string ptr in
+          Pointer.free ptr;
+          string)
+    }
+  ;;
+
+  let t : t Type.t = Pointer (Memory_representation.char, view)
+end
+
+module Data_view_as_c_string = struct
+  type t = Data_view.t
+
+  let view_const =
+    { Type.Ptr_view.to_js_arg =
+        (fun repr data_view ->
+          let ptr = Pointer.malloc ~gc:false repr (Data_view.byte_length data_view) in
+          let address = Pointer.address ptr in
+          memcpy_dataview ~dst:address ~src:data_view;
+          address)
+    ; finalize_arg = (fun ptr _ -> Pointer.free ptr)
+    ; of_js_return =
+        (fun _ -> failwith "Cannot deserialize data view from c string, unknown length")
+    }
+  ;;
+
+  let t_const : t Type.t = Pointer (Memory_representation.char, view_const)
 end

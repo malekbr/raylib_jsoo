@@ -18,19 +18,17 @@ module Color = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
+  type t =
     { r : int
     ; g : int
     ; b : int
     ; a : int
     }
 
-  type t = t' Pointer.t
-
-  let r, repr_t = field empty_struct uint8_t
-  let g, repr_t = field repr_t uint8_t
-  let b, repr_t = field repr_t uint8_t
-  let a, repr_t = field repr_t uint8_t
+  let _r, repr_t = field empty_struct uint8_t
+  let _g, repr_t = field repr_t uint8_t
+  let _b, repr_t = field repr_t uint8_t
+  let _a, repr_t = field repr_t uint8_t
 
   let repr_t =
     lift
@@ -39,48 +37,46 @@ module Color = struct
       ~contramap:(fun (((((), r), g), b), a) -> { r; g; b; a })
   ;;
 
-  let create r g b a = Pointer.malloc_value repr_t { r; g; b; a }
-  let lightgray = Pointer.malloc_value_lazy repr_t { r = 200; g = 200; b = 200; a = 255 }
-  let gray = Pointer.malloc_value_lazy repr_t { r = 130; g = 130; b = 130; a = 255 }
-  let darkgray = Pointer.malloc_value_lazy repr_t { r = 80; g = 80; b = 80; a = 255 }
-  let yellow = Pointer.malloc_value_lazy repr_t { r = 253; g = 249; b = 0; a = 255 }
-  let gold = Pointer.malloc_value_lazy repr_t { r = 255; g = 203; b = 0; a = 255 }
-  let orange = Pointer.malloc_value_lazy repr_t { r = 255; g = 161; b = 0; a = 255 }
-  let pink = Pointer.malloc_value_lazy repr_t { r = 255; g = 109; b = 194; a = 255 }
-  let red = Pointer.malloc_value_lazy repr_t { r = 230; g = 41; b = 55; a = 255 }
-  let maroon = Pointer.malloc_value_lazy repr_t { r = 190; g = 33; b = 55; a = 255 }
-  let green = Pointer.malloc_value_lazy repr_t { r = 0; g = 228; b = 48; a = 255 }
-  let lime = Pointer.malloc_value_lazy repr_t { r = 0; g = 158; b = 47; a = 255 }
-  let darkgreen = Pointer.malloc_value_lazy repr_t { r = 0; g = 117; b = 44; a = 255 }
-  let skyblue = Pointer.malloc_value_lazy repr_t { r = 102; g = 191; b = 255; a = 255 }
-  let blue = Pointer.malloc_value_lazy repr_t { r = 0; g = 121; b = 241; a = 255 }
-  let darkblue = Pointer.malloc_value_lazy repr_t { r = 0; g = 82; b = 172; a = 255 }
-  let purple = Pointer.malloc_value_lazy repr_t { r = 200; g = 122; b = 255; a = 255 }
-  let violet = Pointer.malloc_value_lazy repr_t { r = 135; g = 60; b = 190; a = 255 }
-  let darkpurple = Pointer.malloc_value_lazy repr_t { r = 112; g = 31; b = 126; a = 255 }
-  let beige = Pointer.malloc_value_lazy repr_t { r = 211; g = 176; b = 131; a = 255 }
-  let brown = Pointer.malloc_value_lazy repr_t { r = 127; g = 106; b = 79; a = 255 }
-  let darkbrown = Pointer.malloc_value_lazy repr_t { r = 76; g = 63; b = 47; a = 255 }
-  let white = Pointer.malloc_value_lazy repr_t { r = 255; g = 255; b = 255; a = 255 }
-  let black = Pointer.malloc_value_lazy repr_t { r = 0; g = 0; b = 0; a = 255 }
-  let blank = Pointer.malloc_value_lazy repr_t { r = 0; g = 0; b = 0; a = 0 }
-  let magenta = Pointer.malloc_value_lazy repr_t { r = 255; g = 0; b = 255; a = 255 }
-  let raywhite = Pointer.malloc_value_lazy repr_t { r = 245; g = 245; b = 245; a = 255 }
+  let create r g b a = { r; g; b; a }
+  let lightgray = { r = 200; g = 200; b = 200; a = 255 }
+  let gray = { r = 130; g = 130; b = 130; a = 255 }
+  let darkgray = { r = 80; g = 80; b = 80; a = 255 }
+  let yellow = { r = 253; g = 249; b = 0; a = 255 }
+  let gold = { r = 255; g = 203; b = 0; a = 255 }
+  let orange = { r = 255; g = 161; b = 0; a = 255 }
+  let pink = { r = 255; g = 109; b = 194; a = 255 }
+  let red = { r = 230; g = 41; b = 55; a = 255 }
+  let maroon = { r = 190; g = 33; b = 55; a = 255 }
+  let green = { r = 0; g = 228; b = 48; a = 255 }
+  let lime = { r = 0; g = 158; b = 47; a = 255 }
+  let darkgreen = { r = 0; g = 117; b = 44; a = 255 }
+  let skyblue = { r = 102; g = 191; b = 255; a = 255 }
+  let blue = { r = 0; g = 121; b = 241; a = 255 }
+  let darkblue = { r = 0; g = 82; b = 172; a = 255 }
+  let purple = { r = 200; g = 122; b = 255; a = 255 }
+  let violet = { r = 135; g = 60; b = 190; a = 255 }
+  let darkpurple = { r = 112; g = 31; b = 126; a = 255 }
+  let beige = { r = 211; g = 176; b = 131; a = 255 }
+  let brown = { r = 127; g = 106; b = 79; a = 255 }
+  let darkbrown = { r = 76; g = 63; b = 47; a = 255 }
+  let white = { r = 255; g = 255; b = 255; a = 255 }
+  let black = { r = 0; g = 0; b = 0; a = 255 }
+  let blank = { r = 0; g = 0; b = 0; a = 0 }
+  let magenta = { r = 255; g = 0; b = 255; a = 255 }
+  let raywhite = { r = 245; g = 245; b = 245; a = 255 }
 end
 
 module Vector2 = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
+  type t =
     { x : float
     ; y : float
     }
 
-  type t = t' Pointer.t
-
-  let x, repr_t = field empty_struct float32_t
-  let y, repr_t = field repr_t float32_t
+  let _x, repr_t = field empty_struct float32_t
+  let _y, repr_t = field repr_t float32_t
 
   let repr_t =
     lift
@@ -89,9 +85,9 @@ module Vector2 = struct
       ~contramap:(fun (((), x), y) -> { x; y })
   ;;
 
-  let create x y = Pointer.malloc_value repr_t { x; y }
-  let x (t : t) = t.@(x)
-  let y (t : t) = t.@(y)
+  let create x y = { x; y }
+  let x (t : t) = t.x
+  let y (t : t) = t.y
 
   let add =
     Function.(
@@ -128,19 +124,17 @@ module Camera2D = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
-    { offset : Vector2.t'
-    ; target : Vector2.t'
+  type t =
+    { offset : Vector2.t
+    ; target : Vector2.t
     ; rotation : float (* Degrees *)
     ; zoom : float (* Scaling *)
     }
 
-  type t = t' Pointer.t
-
-  let offset, repr_t = field empty_struct Vector2.repr_t
-  let target, repr_t = field repr_t Vector2.repr_t
-  let rotation, repr_t = field repr_t float32_t
-  let zoom, repr_t = field repr_t float32_t
+  let _offset, repr_t = field empty_struct Vector2.repr_t
+  let _target, repr_t = field repr_t Vector2.repr_t
+  let _rotation, repr_t = field repr_t float32_t
+  let _zoom, repr_t = field repr_t float32_t
 
   let repr_t =
     lift
@@ -151,28 +145,24 @@ module Camera2D = struct
         { offset; target; rotation; zoom })
   ;;
 
-  let create offset target rotation zoom =
-    Pointer.malloc_value repr_t { offset; target; rotation; zoom }
-  ;;
+  let create offset target rotation zoom = { offset; target; rotation; zoom }
 end
 
 module Rectangle = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
+  type t =
     { x : float
     ; y : float
     ; width : float
     ; height : float
     }
 
-  type t = t' Pointer.t
-
-  let x, repr_t = field empty_struct float32_t
-  let y, repr_t = field repr_t float32_t
-  let width, repr_t = field repr_t float32_t
-  let height, repr_t = field repr_t float32_t
+  let _x, repr_t = field empty_struct float32_t
+  let _y, repr_t = field repr_t float32_t
+  let _width, repr_t = field repr_t float32_t
+  let _height, repr_t = field repr_t float32_t
 
   let repr_t =
     lift
@@ -181,32 +171,30 @@ module Rectangle = struct
       ~contramap:(fun (((((), x), y), width), height) -> { x; y; width; height })
   ;;
 
-  let create x y width height = Pointer.malloc_value repr_t { x; y; width; height }
-  let x (t : t) = t.@(x)
-  let y (t : t) = t.@(y)
-  let width (t : t) = t.@(width)
-  let height (t : t) = t.@(height)
+  let create x y width height = { x; y; width; height }
+  let x (t : t) = t.x
+  let y (t : t) = t.y
+  let width (t : t) = t.width
+  let height (t : t) = t.height
 end
 
 module Image = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
-    { data : C_string.t
+  type t =
+    { data : char Pointer.t
     ; width : int
     ; height : int
     ; mipmaps : int
     ; format : int
     }
 
-  type t = t' Pointer.t
-
-  let data, repr_t = field empty_struct (Pointer.repr_t Memory_representation.char)
-  let width, repr_t = field repr_t int32_t
-  let height, repr_t = field repr_t int32_t
-  let mipmaps, repr_t = field repr_t int32_t
-  let format, repr_t = field repr_t int32_t
+  let _data, repr_t = field empty_struct (Pointer.repr_t Memory_representation.char)
+  let _width, repr_t = field repr_t int32_t
+  let _height, repr_t = field repr_t int32_t
+  let _mipmaps, repr_t = field repr_t int32_t
+  let _format, repr_t = field repr_t int32_t
 
   let repr_t =
     lift
@@ -222,7 +210,7 @@ module Texture2D = struct
   open! Memory_representation
   open! Structure
 
-  type t' =
+  type t =
     { id : int
     ; width : int
     ; height : int
@@ -230,13 +218,11 @@ module Texture2D = struct
     ; format : int
     }
 
-  type t = t' Pointer.t
-
-  let id, repr_t = field empty_struct uint32_t
-  let width, repr_t = field repr_t int32_t
-  let height, repr_t = field repr_t int32_t
-  let mipmaps, repr_t = field repr_t int32_t
-  let format, repr_t = field repr_t int32_t
+  let _id, repr_t = field empty_struct uint32_t
+  let _width, repr_t = field repr_t int32_t
+  let _height, repr_t = field repr_t int32_t
+  let _mipmaps, repr_t = field repr_t int32_t
+  let _format, repr_t = field repr_t int32_t
 
   let repr_t =
     lift
@@ -247,8 +233,8 @@ module Texture2D = struct
         { id; width; height; mipmaps; format })
   ;;
 
-  let width (t : t) = t.@(width)
-  let height (t : t) = t.@(height)
+  let width (t : t) = t.width
+  let height (t : t) = t.height
 end
 
 module Key = struct
@@ -751,4 +737,9 @@ let is_key_pressed =
     extern
       "_IsKeyPressed"
       (Primitive Key.C_repr.ocaml_primitive_t @-> returning (Primitive Primitive.bool)))
+;;
+
+let get_key_pressed =
+  Function.(
+    extern "_GetKeyPressed" (Void @-> returning (Primitive Key.C_repr.ocaml_primitive_t)))
 ;;

@@ -93,7 +93,8 @@ type t
 
 val t_to_js : t -> Ojs.t
 val t_of_js : Ojs.t -> t
-val array_buffer : t -> Array_buffer.t Promise.Any_error.t [@@js.call "arrayBuffer"]]
+val array_buffer : t -> Array_buffer.t Promise.Any_error.t [@@js.call "arrayBuffer"]
+val text : t -> string Promise.Any_error.t [@@js.call]]
 
 module Element =
 [%js:

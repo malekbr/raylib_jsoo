@@ -23,7 +23,7 @@ let () = Console.log [ Ojs.string_to_js "little_endian"; Ojs.bool_to_js little_e
 module Load_state = struct
   type t =
     { instance : Module.t
-    ; watermelon : Data_view.t
+    ; watermelon : string
     }
 end
 
@@ -33,7 +33,13 @@ let ready =
     let%bind response = fetch "watermelon.png" () in
     Response.array_buffer response
   in
-  { Load_state.instance; watermelon = Data_view.create watermelon }
+  { Load_state.instance
+  ; watermelon =
+      (let view = Data_view.create watermelon in
+       Console.log [ view ];
+       String.init (Data_view.byte_length view) ~f:(fun byte_offset ->
+         Data_view.get_uint8 view ~byte_offset |> Char.of_int_exn))
+  }
 ;;
 
 let (_ : unit Promise.t) =
@@ -46,18 +52,25 @@ let (_ : unit Promise.t) =
     ;;
 
     let () = Console.log [ instance ]
-    let vector = Vector2.add (Vector2.create 1. 2.) (Vector2.create 4. 5.) |> Pointer.get
+    let vector = Vector2.add (Vector2.create 1. 2.) (Vector2.create 4. 5.)
     let () = Console.log [ vector.x; vector.y ]
-    let () = Console.log [ C_string.(of_string "to c and back" |> to_string) ]
+
+    let () =
+      Console.log
+        [ C_string.(
+            Pointer.unsafe_of_raw
+              (view.to_js_arg Memory_representation.char "to c and back")
+              Memory_representation.char
+            |> view.of_js_return)
+        ]
+    ;;
 
     let () =
       set_config_flags (Config_flags.C_repr.Orable.of_ocaml_list [ MSAA_4X_HINT ]);
-      init_window 800 600 (C_string.of_string "Test title");
+      init_window 800 600 "Test title";
+      Console.log [ watermelon ];
       let watermelon_image =
-        load_image_from_memory
-          (C_string.of_string ".png")
-          (C_string.of_data_view watermelon)
-          (Data_view.byte_length watermelon)
+        load_image_from_memory ".png" watermelon (String.length watermelon)
       in
       let watermelon_texture = load_texture_from_image watermelon_image in
       every_animation_frame 0. ~f:(fun rotation ->
@@ -65,17 +78,13 @@ let (_ : unit Promise.t) =
         begin_drawing ();
         clear_background Color.black;
         begin_mode_2d
-          (Pointer.malloc_value
-             Camera2D.repr_t
-             { target = { x = 400.; y = 300. }
-             ; offset = { x = 400.; y = 300. }
-             ; rotation
-             ; zoom = 1.
-             });
+          { target = { x = 400.; y = 300. }
+          ; offset = { x = 400.; y = 300. }
+          ; rotation
+          ; zoom = 1.
+          };
         draw_rectangle_rounded
-          (Pointer.malloc_value
-             Rectangle.repr_t
-             { x = 380.; y = 280.; width = 40.; height = 40. })
+          { x = 380.; y = 280.; width = 40.; height = 40. }
           0.5
           5
           Color.red;
